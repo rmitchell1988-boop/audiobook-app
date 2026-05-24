@@ -380,19 +380,20 @@ function runOCR(imageData) {
   }).then(({ data: { text } }) => {
     progressWrap.style.display = 'none';
     progressBar.style.width = '100%';
-    const cleaned = text.trim();
+    const cleaned = cleanText(text, currentLang);
     if (!cleaned) {
       status.textContent = 'No text found — try cropping tighter or use a clearer photo.';
       uploadAgain.style.display = 'inline-block';
       return;
     }
-    status.textContent = '✓ Text extracted — edit if needed, then press Play.';
+    status.textContent = '⏳ Generating audio...';
     textArea.value = cleaned;
     textArea.dir = currentLang === 'he' ? 'rtl' : 'ltr';
     textArea.style.display = 'block';
     controls.style.display = 'flex';
     uploadAgain.style.display = 'inline-block';
     populateVoices();
+    speak();
   }).catch(() => {
     progressWrap.style.display = 'none';
     status.textContent = 'Error reading image — please try again.';
@@ -415,6 +416,23 @@ function populateVoices() {
     opt.value = i; opt.textContent = v.label;
     voiceSelect.appendChild(opt);
   });
+}
+
+function cleanText(raw, lang) {
+  let t = raw;
+  // Remove common OCR noise characters
+  t = t.replace(/[|\[\]{}@#^*~`<>]/g, '');
+  // Remove isolated single non-letter characters on their own line
+  t = t.replace(/^\s*[^\w\u05D0-\u05EA\s]\s*$/gm, '');
+  // Collapse multiple spaces
+  t = t.replace(/[ \t]{2,}/g, ' ');
+  // Collapse 3+ newlines into 2
+  t = t.replace(/\n{3,}/g, '\n\n');
+  // For Hebrew, remove stray Latin characters that are clearly OCR errors
+  if (lang === 'he') {
+    t = t.replace(/[a-zA-Z]{1,2}(?=\s|$)/gm, '');
+  }
+  return t.trim();
 }
 
 async function speak() {
