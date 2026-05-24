@@ -195,6 +195,12 @@
     <input type="text" id="api-key-input" placeholder="Paste your API key here" value="">
   </div>
 
+  <div class="ctrl-row" style="margin-bottom: 1.25rem;">
+    <span class="ctrl-label">Language of your book</span>
+    <button class="lang-btn active" id="btn-en" onclick="setLang('en')">English</button>
+    <button class="lang-btn" id="btn-he" onclick="setLang('he')">עברית</button>
+  </div>
+
   <div id="drop-zone" onclick="document.getElementById('file-input').click()">
     <div class="icon">📷</div>
     <p>Tap to upload a photo of your book page</p>
@@ -218,11 +224,6 @@
   <textarea id="text-area" placeholder="Extracted text appears here — edit if needed before pressing Play..."></textarea>
 
   <div id="controls">
-    <div class="ctrl-row">
-      <span class="ctrl-label">Language</span>
-      <button class="lang-btn active" id="btn-en" onclick="setLang('en')">English</button>
-      <button class="lang-btn" id="btn-he" onclick="setLang('he')">עברית</button>
-    </div>
     <div class="ctrl-row">
       <span class="ctrl-label">Voice</span>
       <select id="voice-select"></select>
