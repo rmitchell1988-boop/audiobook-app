@@ -419,18 +419,36 @@ function populateVoices() {
 }
 
 function cleanText(raw, lang) {
-  let t = raw;
-  // Remove common OCR noise characters
+  // Split into lines and filter out garbage lines
+  const lines = raw.split('\n').map(l => l.trim());
+  const goodLines = lines.filter(line => {
+    if (!line) return false;
+    // Count letters (Latin or Hebrew)
+    const letters = (line.match(/[a-zA-Z\u05D0-\u05EA]/g) || []).length;
+    const total = line.replace(/\s/g, '').length;
+    if (total === 0) return false;
+    // Line must be at least 40% real letters
+    if (letters / total < 0.4) return false;
+    // Reject lines with too many non-word symbols
+    const noise = (line.match(/[|\[\]{}@#^*~`<>=+\\/_]/g) || []).length;
+    if (noise > 2) return false;
+    // Reject lines that look like random short character clusters (e.g. "E fx yo")
+    const words = line.split(/\s+/).filter(w => w.length > 0);
+    const shortGarbage = words.filter(w => w.length <= 2 && !/^(a|I|is|in|it|on|of|to|do|no|so|or|be|he|we|me|my|by|an|as|at|if|up|go|oh|ok|hi)$/i.test(w));
+    if (words.length > 0 && shortGarbage.length / words.length > 0.6) return false;
+    return true;
+  });
+
+  let t = goodLines.join('\n');
+  // Remove leftover noise characters
   t = t.replace(/[|\[\]{}@#^*~`<>]/g, '');
-  // Remove isolated single non-letter characters on their own line
-  t = t.replace(/^\s*[^\w\u05D0-\u05EA\s]\s*$/gm, '');
   // Collapse multiple spaces
   t = t.replace(/[ \t]{2,}/g, ' ');
-  // Collapse 3+ newlines into 2
+  // Collapse 3+ newlines
   t = t.replace(/\n{3,}/g, '\n\n');
-  // For Hebrew, remove stray Latin characters that are clearly OCR errors
+  // For Hebrew, remove stray short Latin words that are OCR errors
   if (lang === 'he') {
-    t = t.replace(/[a-zA-Z]{1,2}(?=\s|$)/gm, '');
+    t = t.replace(/\b[a-zA-Z]{1,2}\b/g, '');
   }
   return t.trim();
 }
