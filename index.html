@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audiobook Creator</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f5f4f0;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: #111;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 1.75rem;
+    }
+
+    #drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 14px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      background: #fff;
+    }
+    #drop-zone:hover, #drop-zone.drag-over {
+      background: #eef5ff;
+      border-color: #4a90d9;
+    }
+    #drop-zone input { display: none; }
+    #drop-zone .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    #drop-zone p { font-size: 0.95rem; color: #444; margin: 0.25rem 0 0; }
+    #drop-zone small { color: #999; font-size: 0.8rem; }
+
+    #crop-section { display: none; margin-top: 1.25rem; }
+    #crop-hint {
+      font-size: 0.82rem; color: #666;
+      background: #fff8e1; border: 1px solid #ffe082;
+      border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;
+    }
+    #crop-canvas {
+      display: block; max-width: 100%;
+      border-radius: 10px; border: 1px solid #ddd;
+      cursor: crosshair;
+    }
+    .crop-btns { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+    #progress-wrap {
+      height: 5px; background: #e8e8e8;
+      border-radius: 4px; margin-top: 1rem;
+      display: none; overflow: hidden;
+    }
+    #progress-bar {
+      height: 5px; background: #3a7bd5;
+      border-radius: 4px; width: 0%;
+      transition: width 0.3s;
+    }
+
+    #status {
+      font-size: 0.85rem; color: #666;
+      margin-top: 0.6rem; min-height: 1.2em;
+    }
+
+    #text-area {
+      width: 100%; min-height: 130px;
+      margin-top: 1.25rem; padding: 0.9rem 1rem;
+      font-size: 0.95rem; line-height: 1.7;
+      font-family: inherit;
+      border: 1px solid #ddd; border-radius: 10px;
+      background: #fff; color: #1a1a1a;
+      resize: vertical; display: none;
+    }
+
+    #controls {
+      display: none; margin-top: 1.25rem;
+      flex-direction: column; gap: 12px;
+    }
+
+    .ctrl-row {
+      display: flex; align-items: center;
+      gap: 10px; flex-wrap: wrap;
+    }
+
+    .ctrl-label {
+      font-size: 0.82rem; color: #666;
+      min-width: 52px;
+    }
+
+    .lang-btn {
+      padding: 6px 16px; border-radius: 8px;
+      font-size: 0.85rem; cursor: pointer;
+      border: 1px solid #ccc;
+      background: #fff; color: #333;
+      transition: all 0.15s;
+    }
+    .lang-btn.active {
+      background: #3a7bd5; color: #fff;
+      border-color: #3a7bd5;
+    }
+
+    select {
+      padding: 6px 10px; border-radius: 8px;
+      border: 1px solid #ddd; font-size: 0.85rem;
+      background: #fff; color: #1a1a1a;
+      max-width: 260px;
+    }
+
+    input[type=range] { width: 100px; accent-color: #3a7bd5; }
+
+    #speed-val {
+      font-size: 0.82rem; color: #666;
+      min-width: 30px;
+    }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 22px; border-radius: 9px;
+      background: #3a7bd5; color: #fff; border: none;
+      font-size: 0.9rem; font-weight: 500;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn-primary:hover { background: #2c62b0; }
+    .btn-primary:disabled {
+      background: #ccc; color: #888; cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 16px; border-radius: 9px;
+      background: #fff; color: #333;
+      border: 1px solid #ccc;
+      font-size: 0.9rem; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-secondary:hover { background: #f5f5f5; }
+
+    #tts-status {
+      font-size: 0.82rem; color: #3a7bd5;
+      min-height: 1.2em; display: none;
+    }
+
+    #upload-again {
+      display: none; background: none; border: none;
+      color: #3a7bd5; font-size: 0.82rem;
+      cursor: pointer; margin-top: 0.6rem;
+      text-decoration: underline; padding: 0;
+    }
+
+    .api-key-row {
+      margin-bottom: 1.25rem;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .api-key-row label { font-size: 0.82rem; color: #666; }
+    .api-key-row input[type=text] {
+      flex: 1; min-width: 200px;
+      padding: 7px 10px; border-radius: 8px;
+      border: 1px solid #ddd; font-size: 0.82rem;
+      font-family: monospace; background: #fff; color: #333;
+    }
+    .api-key-row input[type=text]:focus { outline: 2px solid #3a7bd5; border-color: transparent; }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 1.3rem; }
+      .btn-primary, .btn-secondary { font-size: 0.85rem; padding: 8px 14px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>📖 Audiobook Creator</h1>
+  <p class="subtitle">Photograph a book page — we'll read it aloud in English or Hebrew</p>
+
+  <div class="api-key-row">
+    <label for="api-key-input">Google TTS API Key</label>
+    <input type="text" id="api-key-input" placeholder="Paste your API key here" value="AIzaSyDJJEe5gdxV_bpHzMxUQLlrqzv95a_3CK0">
+  </div>
+
+  <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <div class="icon">📷</div>
+    <p>Tap to upload a photo of your book page</p>
+    <small>JPG, PNG, WEBP — drag & drop also works</small>
+    <input type="file" id="file-input" accept="image/*" capture="environment">
+  </div>
+
+  <div id="crop-section">
+    <p id="crop-hint">✂️ Draw a box around just the text area to exclude margins and noise — then click <strong>Crop & Scan</strong>. Or skip to scan the full image.</p>
+    <canvas id="crop-canvas"></canvas>
+    <div class="crop-btns">
+      <button class="btn-primary" onclick="applyCrop()">✂️ Crop & scan</button>
+      <button class="btn-secondary" onclick="runOCR(fullImageData)">Skip — scan full image</button>
+    </div>
+  </div>
+
+  <div id="progress-wrap"><div id="progress-bar"></div></div>
+  <p id="status"></p>
+  <button id="upload-again" onclick="resetApp()">↺ Scan another page</button>
+
+  <textarea id="text-area" placeholder="Extracted text appears here — edit if needed before pressing Play..."></textarea>
+
+  <div id="controls">
+    <div class="ctrl-row">
+      <span class="ctrl-label">Language</span>
+      <button class="lang-btn active" id="btn-en" onclick="setLang('en')">English</button>
+      <button class="lang-btn" id="btn-he" onclick="setLang('he')">עברית</button>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Voice</span>
+      <select id="voice-select"></select>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Speed</span>
+      <input type="range" id="speed-range" min="0.5" max="2" step="0.1" value="1">
+      <span id="speed-val">1.0×</span>
+    </div>
+    <div class="ctrl-row">
+      <button class="btn-primary" id="play-btn" onclick="speak()">▶ Play audiobook</button>
+      <button class="btn-secondary" id="stop-btn" style="display:none" onclick="stopAudio()">⏸ Stop</button>
+    </div>
+    <p id="tts-status"></p>
+  </div>
+</div>
+
+<script>
+const voiceOptions = {
+  en: [
+    { label: 'Journey — natural female', name: 'en-US-Journey-F', lang: 'en-US' },
+    { label: 'Journey — natural male', name: 'en-US-Journey-D', lang: 'en-US' },
+    { label: 'Neural2 — female', name: 'en-US-Neural2-F', lang: 'en-US' },
+    { label: 'Neural2 — male', name: 'en-US-Neural2-D', lang: 'en-US' },
+    { label: 'WaveNet — female', name: 'en-US-Wavenet-F', lang: 'en-US' },
+    { label: 'WaveNet — male', name: 'en-US-Wavenet-D', lang: 'en-US' },
+  ],
+  he: [
+    { label: 'WaveNet — female', name: 'he-IL-Wavenet-A', lang: 'he-IL' },
+    { label: 'WaveNet — male', name: 'he-IL-Wavenet-B', lang: 'he-IL' },
+    { label: 'Standard — female', name: 'he-IL-Standard-A', lang: 'he-IL' },
+    { label: 'Standard — male', name: 'he-IL-Standard-B', lang: 'he-IL' },
+  ]
+};
+
+let currentLang = 'en';
+let audioEl = null;
+let fullImageData = null;
+let cropImg = null;
+let isDrawing = false;
+let startX, startY, selX = 0, selY = 0, selW = 0, selH = 0;
+let displayScale = 1;
+
+const cropCanvas = document.getElementById('crop-canvas');
+const cropCtx = cropCanvas.getContext('2d');
+const fileInput = document.getElementById('file-input');
+const dropZone = document.getElementById('drop-zone');
+const cropSection = document.getElementById('crop-section');
+const status = document.getElementById('status');
+const progressWrap = document.getElementById('progress-wrap');
+const progressBar = document.getElementById('progress-bar');
+const textArea = document.getElementById('text-area');
+const controls = document.getElementById('controls');
+const voiceSelect = document.getElementById('voice-select');
+const speedRange = document.getElementById('speed-range');
+const speedVal = document.getElementById('speed-val');
+const playBtn = document.getElementById('play-btn');
+const stopBtn = document.getElementById('stop-btn');
+const ttsStatus = document.getElementById('tts-status');
+const uploadAgain = document.getElementById('upload-again');
+
+speedRange.addEventListener('input', () => {
+  speedVal.textContent = parseFloat(speedRange.value).toFixed(1) + '×';
+});
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadImage(file);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadImage(fileInput.files[0]); });
+
+function loadImage(file) {
+  const url = URL.createObjectURL(file);
+  cropImg = new Image();
+  cropImg.onload = () => {
+    const maxW = Math.min(640, window.innerWidth - 40);
+    displayScale = cropImg.width > maxW ? maxW / cropImg.width : 1;
+    cropCanvas.width = Math.round(cropImg.width * displayScale);
+    cropCanvas.height = Math.round(cropImg.height * displayScale);
+    cropCtx.drawImage(cropImg, 0, 0, cropCanvas.width, cropCanvas.height);
+    fullImageData = file;
+    selX = selY = selW = selH = 0;
+    dropZone.style.display = 'none';
+    cropSection.style.display = 'block';
+  };
+  cropImg.src = url;
+}
+
+function getPos(e) {
+  const r = cropCanvas.getBoundingClientRect();
+  const src = e.touches ? e.touches[0] : e;
+  return { x: src.clientX - r.left, y: src.clientY - r.top };
+}
+
+function drawSelection() {
+  cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+  cropCtx.drawImage(cropImg, 0, 0, cropCanvas.width, cropCanvas.height);
+  if (selW && selH) {
+    cropCtx.fillStyle = 'rgba(0,0,0,0.45)';
+    cropCtx.fillRect(0, 0, cropCanvas.width, cropCanvas.height);
+    cropCtx.clearRect(selX, selY, selW, selH);
+    cropCtx.strokeStyle = '#3a7bd5';
+    cropCtx.lineWidth = 2;
+    cropCtx.strokeRect(selX, selY, selW, selH);
+  }
+}
+
+cropCanvas.addEventListener('mousedown', e => { isDrawing = true; const p = getPos(e); startX = p.x; startY = p.y; });
+cropCanvas.addEventListener('mousemove', e => {
+  if (!isDrawing) return;
+  const p = getPos(e);
+  selX = Math.min(startX, p.x); selY = Math.min(startY, p.y);
+  selW = Math.abs(p.x - startX); selH = Math.abs(p.y - startY);
+  drawSelection();
+});
+cropCanvas.addEventListener('mouseup', () => { isDrawing = false; });
+
+cropCanvas.addEventListener('touchstart', e => { e.preventDefault(); isDrawing = true; const p = getPos(e); startX = p.x; startY = p.y; }, { passive: false });
+cropCanvas.addEventListener('touchmove', e => {
+  e.preventDefault(); if (!isDrawing) return;
+  const p = getPos(e);
+  selX = Math.min(startX, p.x); selY = Math.min(startY, p.y);
+  selW = Math.abs(p.x - startX); selH = Math.abs(p.y - startY);
+  drawSelection();
+}, { passive: false });
+cropCanvas.addEventListener('touchend', e => { e.preventDefault(); isDrawing = false; }, { passive: false });
+
+function applyCrop() {
+  if (!selW || !selH) { runOCR(fullImageData); return; }
+  const offscreen = document.createElement('canvas');
+  offscreen.width = Math.round(selW / displayScale);
+  offscreen.height = Math.round(selH / displayScale);
+  const ctx = offscreen.getContext('2d');
+  ctx.drawImage(cropImg, selX / displayScale, selY / displayScale, selW / displayScale, selH / displayScale, 0, 0, offscreen.width, offscreen.height);
+  offscreen.toBlob(blob => runOCR(blob), 'image/png');
+}
+
+function runOCR(imageData) {
+  cropSection.style.display = 'none';
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+  status.textContent = 'Reading your page...';
+  const ocrLang = currentLang === 'he' ? 'heb' : 'eng';
+  Tesseract.recognize(imageData, ocrLang, {
+    logger: m => {
+      if (m.status === 'recognizing text') {
+        progressBar.style.width = Math.round(m.progress * 100) + '%';
+        status.textContent = 'Extracting text… ' + Math.round(m.progress * 100) + '%';
+      }
+    }
+  }).then(({ data: { text } }) => {
+    progressWrap.style.display = 'none';
+    progressBar.style.width = '100%';
+    const cleaned = text.trim();
+    if (!cleaned) {
+      status.textContent = 'No text found — try cropping tighter or use a clearer photo.';
+      uploadAgain.style.display = 'inline-block';
+      return;
+    }
+    status.textContent = '✓ Text extracted — edit if needed, then press Play.';
+    textArea.value = cleaned;
+    textArea.dir = currentLang === 'he' ? 'rtl' : 'ltr';
+    textArea.style.display = 'block';
+    controls.style.display = 'flex';
+    uploadAgain.style.display = 'inline-block';
+    populateVoices();
+  }).catch(() => {
+    progressWrap.style.display = 'none';
+    status.textContent = 'Error reading image — please try again.';
+    uploadAgain.style.display = 'inline-block';
+  });
+}
+
+function setLang(lang) {
+  currentLang = lang;
+  document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+  document.getElementById('btn-he').classList.toggle('active', lang === 'he');
+  textArea.dir = lang === 'he' ? 'rtl' : 'ltr';
+  populateVoices();
+}
+
+function populateVoices() {
+  voiceSelect.innerHTML = '';
+  voiceOptions[currentLang].forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = v.label;
+    voiceSelect.appendChild(opt);
+  });
+}
+
+async function speak() {
+  const text = textArea.value.trim();
+  if (!text) return;
+  stopAudio();
+  const apiKey = document.getElementById('api-key-input').value.trim();
+  if (!apiKey) { ttsStatus.textContent = 'Please enter your Google TTS API key above.'; ttsStatus.style.display = 'block'; return; }
+  playBtn.disabled = true;
+  ttsStatus.textContent = '⏳ Generating audio...';
+  ttsStatus.style.display = 'block';
+  const voice = voiceOptions[currentLang][parseInt(voiceSelect.value) || 0];
+  const speed = parseFloat(speedRange.value);
+  try {
+    const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input: { text },
+        voice: { languageCode: voice.lang, name: voice.name },
+        audioConfig: { audioEncoding: 'MP3', speakingRate: speed }
+      })
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.error?.message || 'API error'); }
+    const data = await res.json();
+    const bytes = atob(data.audioContent);
+    const buf = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+    const blob = new Blob([buf], { type: 'audio/mp3' });
+    audioEl = new Audio(URL.createObjectURL(blob));
+    audioEl.onplay = () => { playBtn.style.display = 'none'; stopBtn.style.display = 'inline-flex'; ttsStatus.textContent = '▶ Reading aloud...'; };
+    audioEl.onended = audioEl.onerror = () => { playBtn.style.display = 'inline-flex'; playBtn.disabled = false; stopBtn.style.display = 'none'; ttsStatus.style.display = 'none'; };
+    audioEl.play();
+  } catch (err) {
+    ttsStatus.textContent = 'Error: ' + err.message;
+    playBtn.disabled = false; playBtn.style.display = 'inline-flex';
+  }
+}
+
+function stopAudio() {
+  if (audioEl) { audioEl.pause(); audioEl.src = ''; audioEl = null; }
+  playBtn.style.display = 'inline-flex'; playBtn.disabled = false;
+  stopBtn.style.display = 'none'; ttsStatus.style.display = 'none';
+}
+
+function resetApp() {
+  stopAudio();
+  dropZone.style.display = 'block';
+  cropSection.style.display = 'none';
+  textArea.style.display = 'none'; textArea.value = '';
+  controls.style.display = 'none';
+  uploadAgain.style.display = 'none';
+  status.textContent = '';
+  progressBar.style.width = '0%'; progressWrap.style.display = 'none';
+  fileInput.value = ''; fullImageData = null;
+  selX = selY = selW = selH = 0;
+}
+
+populateVoices();
+</script>
+</body>
+</html>
